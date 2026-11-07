@@ -2,7 +2,7 @@
 
 **Room:** [Further Nmap](https://tryhackme.com/room/furthernmap)  
 **Difficulty:** Easy  
-**Platform:** TryHackMe AttackBox
+**Platform:** TryHackMe 
 
 ---
 
