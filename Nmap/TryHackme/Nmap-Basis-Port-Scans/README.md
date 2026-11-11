@@ -49,7 +49,7 @@ Also covers port states, TCP flags, and options for controlling scan scope and p
 
 ## Key Answers
 
-### Task 2 – TCP and UDP Ports
+### Task 2 - TCP and UDP Ports
 
 | Question | Answer |
 |----------|--------|
@@ -58,20 +58,20 @@ Also covers port states, TCP flags, and options for controlling scan scope and p
 | How many port states does Nmap consider? | 6 |
 | Which port state is the most interesting to discover as a pentester? | Open |
 
-### Task 3 – TCP Flags
+### Task 3 - TCP Flags
 
 | Question | Answer |
 |----------|--------|
 | What 3 letters represent the Reset flag? | RST |
 | Which flag needs to be set when you initiate a TCP connection (first packet of TCP 3-way handshake)? | SYN |
 
-### Task 4 – TCP Connect Scan
+### Task 4 - TCP Connect Scan
 
 - Completes the full TCP 3-way handshake
 - Works without root privileges
 - Command: `nmap -sT <IP>`
 
-### Task 5 – TCP SYN Scan
+### Task 5 - TCP SYN Scan
 
 - Default for privileged users (root/sudo)
 - Half-open / stealth scan (does not complete the handshake)
@@ -88,7 +88,7 @@ Also covers port states, TCP flags, and options for controlling scan scope and p
 
 - After launching a TCP SYN scan, how many SYN-ACK packets are successfully received? → **4**
 
-### Task 6 – UDP Scan
+### Task 6 - UDP Scan
 
 - Connectionless protocol
 - Open ports often give no response
