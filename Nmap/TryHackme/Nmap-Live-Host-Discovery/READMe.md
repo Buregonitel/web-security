@@ -1,72 +1,73 @@
-# Nmap Live Host Discovery — TryHackMe
+# Nmap Live Host Discovery - TryHackMe
 
 **Room:** [Nmap Live Host Discovery](https://tryhackme.com/room/nmap01)  
 **Difficulty:** Medium  
 **Date completed:** November 2026  
+**Platform:** TryHackMe AttackBox  
 **Series:** 1/4 (Nmap series)
 
 ---
 
-## Описание
+## Description
 
-Первая комната из серии Nmap. Фокус на **обнаружении живых хостов** (host discovery) до начала сканирования портов.
+First room in the Nmap series. Focus is on **live host discovery** before starting port scanning.
 
-Рассматриваются методы:
+Methods covered:
 
 - **ARP scan**
 - **ICMP scan** (Echo, Timestamp, Address Mask)
 - **TCP/UDP Ping scan**
 
-Также упоминаются инструменты `arp-scan` и `masscan`.
+Also introduces `arp-scan` and `masscan`.
 
 ---
 
-## Структура комнаты
+## Room Structure
 
-| Task | Название                        | Содержание |
-|------|----------------------------------|------------|
-| 1    | Introduction                     | Зачем нужно host discovery |
-| 2    | Subnetworks                      | Подсети, ARP и границы |
-| 3    | Enumerating Targets              | Как указывать цели Nmap |
-| 4    | Discovering Live Hosts           | ARP / ICMP / TCP / UDP |
-| 5    | Nmap Host Discovery Using ARP    | `-PR` |
-| 6    | Nmap Host Discovery Using ICMP   | `-PE`, `-PP`, `-PM` |
-| 7    | Nmap Host Discovery Using TCP/UDP| `-PS`, `-PA`, `-PU` |
-| 8    | Using Reverse-DNS Lookup         | `-n`, `-R` |
-| 9    | Summary                          | Сводка флагов |
+| Task | Title                              | Summary |
+|------|------------------------------------|---------|
+| 1    | Introduction                       | Why host discovery is needed |
+| 2    | Subnetworks                        | Subnets, ARP and boundaries |
+| 3    | Enumerating Targets                | How to specify targets in Nmap |
+| 4    | Discovering Live Hosts             | ARP / ICMP / TCP / UDP |
+| 5    | Nmap Host Discovery Using ARP      | `-PR` |
+| 6    | Nmap Host Discovery Using ICMP     | `-PE`, `-PP`, `-PM` |
+| 7    | Nmap Host Discovery Using TCP/UDP  | `-PS`, `-PA`, `-PU` |
+| 8    | Using Reverse-DNS Lookup           | `-n`, `-R` |
+| 9    | Summary                            | Flags overview |
 
 ---
 
-## Ключевые ответы
+## Key Answers
 
-### Task 2 – Subnetworks (симулятор)
+### Task 2 - Subnetworks (simulator)
 
-**Отправка ARP Request от computer1 к computer6 (broadcast):**
+**Sending ARP Request from computer1 to computer6 (broadcast):**
 - How many devices can see the ARP Request? → **4**
 - Did computer6 receive the ARP Request? → **N**
 
-**Отправка ARP Request от computer4 к computer6:**
+**Sending ARP Request from computer4 to computer6:**
 - How many devices can see the ARP Request? → **4**
 - Did computer6 receive the ARP Request? → **Y**
 
-### Task 3 – Enumerating Targets
+### Task 3 - Enumerating Targets
 
 - First IP Nmap would scan for `10.10.12.13/29` → **10.10.12.8**
 - How many IP addresses for range `10.10.0-255.101-125` → **6400**
 
-### Task 4 – Discovering Live Hosts (симулятор)
+### Task 4 - Discovering Live Hosts (simulator)
 
-**Ping от computer1 к computer3:**
-- Тип пакета до ping → **ARP Request**
-- Тип пакета, который получил computer1 → **ARP Response**
-- Сколько компьютеров ответило на ping → **1**
+**Ping from computer1 to computer3:**
+- Packet type before the ping → **ARP Request**
+- Packet type received by computer1 → **ARP Response**
+- How many computers responded to the ping → **1**
 
-**Ping от computer2 к computer5:**
-- Первый устройство, ответившее на первый ARP → **router**
-- Первый устройство на второй ARP → **computer5**
-- Нужны ли новые ARP при повторном ping? → **N**
+**Ping from computer2 to computer5:**
+- First device that responded to the first ARP → **router**
+- First device that responded to the second ARP → **computer5**
+- Did another Ping Request require new ARP Requests? → **N**
 
-### Task 5 – ARP Scan
+### Task 5 - ARP Scan
 
 ```bash
 sudo nmap -PR -sn <target>/24
@@ -74,41 +75,41 @@ sudo nmap -PR -sn <target>/24
 
 ### Task 6 – ICMP Scans
 
-| Метод              | Флаг  |
-|--------------------|-------|
-| ICMP Echo          | `-PE` |
-| ICMP Timestamp     | `-PP` |
-| ICMP Address Mask  | `-PM` |
+| Method              | Flag  |
+|---------------------|-------|
+| ICMP Echo           | `-PE` |
+| ICMP Timestamp      | `-PP` |
+| ICMP Address Mask   | `-PM` |
 
-### Task 7 – TCP / UDP Ping
+### Task 7 - TCP / UDP Ping
 
-| Метод            | Флаг              |
-|------------------|-------------------|
-| TCP SYN Ping     | `-PS<ports>`      |
-| TCP ACK Ping     | `-PA<ports>`      |
-| UDP Ping         | `-PU<ports>`      |
+| Method            | Flag              |
+|-------------------|-------------------|
+| TCP SYN Ping      | `-PS<ports>`      |
+| TCP ACK Ping      | `-PA<ports>`      |
+| UDP Ping          | `-PU<ports>`      |
 
-Примеры:
+Examples:
 ```bash
 sudo nmap -PS22,80,443 -sn <target>
 sudo nmap -PA22,80,443 -sn <target>
 sudo nmap -PU53,161 -sn <target>
 ```
 
-### Task 8 – Reverse-DNS
+### Task 8 - Reverse-DNS
 
-- Не делать DNS-резолв → `-n`
-- Всегда делать reverse-DNS → `-R`
+- Never do DNS resolution → `-n`
+- Always do reverse-DNS → `-R`
 
 ---
 
-## Полезные команды (сводка)
+## Useful Commands
 
 ```bash
-# Только host discovery (без скана портов)
+# Host discovery only (no port scan)
 nmap -sn <targets>
 
-# ARP scan (локальная сеть)
+# ARP scan (local network)
 sudo nmap -PR -sn 192.168.1.0/24
 
 # ICMP Echo
@@ -129,28 +130,30 @@ sudo nmap -PA22,80,443 -sn 10.10.0.0/24
 # UDP Ping
 sudo nmap -PU53,161,162 -sn 10.10.0.0/24
 
-# Без DNS
+# No DNS
 nmap -n -sn <targets>
 
-# Список целей без сканирования
+# List targets without scanning
 nmap -sL -n <targets>
 ```
 
 ---
 
-## Важные выводы
+## Key Takeaways
 
-- **ARP** работает только в пределах одной подсети (link-layer).
-- Если ICMP заблокирован, помогают TCP SYN/ACK и UDP ping.
-- Флаг **`-sn`** отключает сканирование портов — только discovery.
-- **`-Pn`** пропускает host discovery полностью (считает все хосты живыми).
-- На локальной сети Nmap по умолчанию предпочитает ARP.
+- **ARP** only works within the same subnet (link-layer)
+- If ICMP is blocked, TCP SYN/ACK and UDP ping help
+- Flag **`-sn`** disables port scanning — discovery only
+- **`-Pn`** skips host discovery completely (treats all hosts as online)
+- On a local network Nmap prefers ARP by default
 
 ---
 
-## Связанные комнаты серии
+## Related Rooms in the Series
 
-1. **Nmap Live Host Discovery** ← текущая
+1. **Nmap Live Host Discovery** ← current
 2. [Nmap Basic Port Scans](https://tryhackme.com/room/nmap02)
 3. [Nmap Advanced Port Scans](https://tryhackme.com/room/nmap03)
 4. [Nmap Post Port Scans](https://tryhackme.com/room/nmap04)
+
+---
