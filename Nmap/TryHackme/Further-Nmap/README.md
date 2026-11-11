@@ -22,7 +22,7 @@ This room focuses on more advanced usage of Nmap. Main topics covered:
 ## Screenshots
 
 ### Practice - results
-![Practice Results](screenshots/practical-2.png)
+![Practice Results](practical.png)
 
 ---
 
