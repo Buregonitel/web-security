@@ -1,183 +1,175 @@
-# Перехват и анализ трафика: `tcpdump` и Wireshark
+# Packet Capture & Traffic Analysis: `tcpdump` and Wireshark
 
-Практический конспект по использованию `tcpdump` в задачах веб-безопасности и сетевой диагностики: быстрый захват пакетов на локальном интерфейсе (`lo`) и сетевых адаптерах, фильтрация BPF-выражениями, чтение TCP-флагов и связка с Wireshark.
+Practical lab notes on using `tcpdump` for web security and network diagnostics: capturing packets on local loopback (`lo`) and network interfaces, filtering with BPF expressions, reading TCP flags, and integrating with Wireshark.
 
-> **Примечание по безопасности:** все эксперименты выполнены на локальном loopback-интерфейсе (`127.0.0.1`) и зарезервированных адресах для документации (`192.0.2.0/24` по RFC 5737). Не загружайте в репозиторий `.pcap`-дампы и скриншоты с реальными паролями, сессионными токенами или ключами API.
+> **Security Note:** All experiments were performed on the local loopback interface (`127.0.0.1`) and documentation-reserved IP blocks (`192.0.2.0/24` per RFC 5737). Never commit `.pcap` captures or screenshots containing real credentials, session tokens, or API keys to a public repository.
 
----
+## Table of Contents
 
-## Содержание
+1. [Basic Flags & Usage](#basic-flags--usage)
+2. [BPF Filters](#bpf-filters)
+3. [Case 1. Capturing Cleartext HTTP Traffic (`-A`)](#case-1-capturing-cleartext-http-traffic--a)
+4. [Case 2. TCP Connection Lifecycle (`SYN`, `SYN-ACK`, `FIN`)](#case-2-tcp-connection-lifecycle-syn-syn-ack-fin)
+5. [Case 3. Probing a Closed Port (`RST`)](#case-3-probing-a-closed-port-rst)
+6. [Case 4. Connection Timeout & `SYN` Retransmissions](#case-4-connection-timeout--syn-retransmissions)
+7. [Case 5. Monitoring DNS Queries (`port 53`)](#case-5-monitoring-dns-queries-port-53)
+8. [Workflow: `tcpdump` + Wireshark](#workflow-tcpdump--wireshark)
 
-1. [Базовые ключи и запуск](#базовые-ключи-и-запуск)
-2. [BPF-фильтры](#bpf-фильтры)
-3. [Кейс 1. Перехват открытого HTTP-трафика (`-A`)](#кейс-1-перехват-открытого-http-трафика--a)
-4. [Кейс 2. Жизненный цикл TCP-соединения (`SYN`, `SYN-ACK`, `FIN`)](#кейс-2-жизненный-цикл-tcp-соединения-syn-syn-ack-fin)
-5. [Кейс 3. Обращение к закрытому порту (`RST`)](#кейс-3-обращение-к-закрытому-порту-rst)
-6. [Кейс 4. Таймаут и ретрансмиты `SYN`](#кейс-4-таймаут-и-ретрансмиты-syn)
-7. [Кейс 5. Мониторинг DNS-запросов (`port 53`)](#кейс-5-мониторинг-dns-запросов-port-53)
-8. [Связка `tcpdump` + Wireshark](#связка-tcpdump--wireshark)
+## Basic Flags & Usage
 
----
+| Flag / Command | Description | Example |
+| :--- | :--- | :--- |
+| `-D` | List available network interfaces | `sudo tcpdump -D` |
+| `-i <iface>` | Specify capture interface (`lo`, `eth0`, `enp4s0`, `any`) | `sudo tcpdump -i lo` |
+| `-nn` | Disable DNS host and port name resolution | `sudo tcpdump -i lo -nn` |
+| `-c <N>` | Stop capturing after `N` packets | `sudo tcpdump -i lo -nn -c 20` |
+| `-A` / `-X` | Print packet payload in ASCII (`-A`) or HEX + ASCII (`-X`) | `sudo tcpdump -i lo -nn -A 'tcp port 8080'` |
+| `-w <file.pcap>` | Write raw packets to a `.pcap` file | `sudo tcpdump -i lo -nn -w capture.pcap` |
+| `-r <file.pcap>` | Read and filter packets from a saved `.pcap` file | `sudo tcpdump -nn -r capture.pcap 'tcp port 8080'` |
 
-## Базовые ключи и запуск
-
-| Флаг / Команда | Назначение | Пример |
-|---|---|---|
-| `-D` | Список доступных интерфейсов | `sudo tcpdump -D` |
-| `-i <iface>` | Выбор интерфейса (`lo`, `eth0`, `enp4s0`, `any`) | `sudo tcpdump -i lo` |
-| `-nn` | Отключить резолвинг IP-адресов и номеров портов в имена | `sudo tcpdump -i lo -nn` |
-| `-c <N>` | Завершить захват после `N` пакетов | `sudo tcpdump -i lo -nn -c 20` |
-| `-A` / `-X` | Вывод полезной нагрузки в ASCII (`-A`) или HEX + ASCII (`-X`) | `sudo tcpdump -i lo -nn -A 'tcp port 8080'` |
-| `-w <file.pcap>` | Сохранить перехваченные пакеты в `.pcap` | `sudo tcpdump -i lo -nn -w capture.pcap` |
-| `-r <file.pcap>` | Прочитать сохранённый дамп с фильтрацией | `sudo tcpdump -nn -r capture.pcap 'tcp port 8080'` |
-
----
-
-## BPF-фильтры
+## BPF Filters
 
 ```bash
-# Трафик конкретного хоста (источник или назначение)
+# Traffic involving a specific host (source or destination)
 sudo tcpdump -i any -nn host 192.0.2.20
 
-# Только исходящий или входящий трафик
+# Only outgoing or incoming traffic
 sudo tcpdump -i any -nn src 127.0.0.1
 sudo tcpdump -i any -nn dst 192.0.2.20
 
-# Фильтрация по портам и протоколам
+# Filter by specific ports and protocols
 sudo tcpdump -i any -nn 'tcp port 80 or tcp port 443'
 sudo tcpdump -i any -nn 'udp port 53 or tcp port 53'
 
-# Фильтрация только управляющих TCP-флагов (SYN, RST, FIN)
+# Filter only TCP control flags (SYN, RST, FIN)
 sudo tcpdump -i lo -nn 'tcp port 8080 and (tcp[tcpflags] & (tcp-syn|tcp-rst|tcp-fin) != 0)'
 ```
 
----
+## Case 1. Capturing Cleartext HTTP Traffic (`-A`)
 
-## Кейс 1. Перехват открытого HTTP-трафика (`-A`)
+**Goal:** Observe the TCP three-way handshake, cleartext HTTP request (`GET`), headers, and HTML response payload.
 
-**Цель:** увидеть в открытом виде этапы установки TCP-сессии, HTTP-запрос (`GET`), заголовки и HTML-ответ сервера.
+**Local Lab Setup:**
 
-**Воспроизведение на локальном стенде:**
-1. Запуск тестового HTTP-сервера на `127.0.0.1:8080`:
+1. Start a local test HTTP server on `127.0.0.1:8080`:
    ```bash
    python3 -m http.server 8080 --bind 127.0.0.1
    ```
-2. Запуск перехвата с выводом содержимого в ASCII:
+
+2. Start packet capture with ASCII payload output:
    ```bash
    sudo tcpdump -i lo -nn -c 20 -A 'tcp port 8080'
    ```
-3. Отправка запроса:
+
+3. Send an HTTP request:
    ```bash
    curl -s -i "http://127.0.0.1:8080/?test=1" | head -n 5
    ```
 
-**Результат захвата:**
+**Capture Results:**
 
-![Захват открытого HTTP-трафика](http-tcpdump.png)
+![HTTP tcpdump capture](http-tcpdump.png)
+![HTTP server log](server-http.png)
 
-![Лог тестового HTTP-сервера](server-http.png)
+**Key Takeaways:**
 
-**На что обратить внимание:**
-* Первые три пакета (`Flags [S]`, `Flags [S.]`, `Flags [.]`) — классическое трёхэтапное TCP-рукопожатие.
-* Пакет с `Flags [P.]` передаёт полезную нагрузку: в открытом виде видны строка запроса `GET /?test=1 HTTP/1.1`, `Host: 127.0.0.1:8080` и `User-Agent: curl/8.5.0`.
-* Ответ сервера содержит статус `HTTP/1.0 200 OK`, заголовки и тело HTML-страницы. Поверх HTTPS (`TLS`) эти данные были бы зашифрованы.
+* The first three packets (`Flags [S]`, `Flags [S.]`, `Flags [.]`) represent the standard TCP three-way handshake.
+* The packet with `Flags [P.]` carries application data: `GET /?test=1 HTTP/1.1`, `Host: 127.0.0.1:8080`, and `User-Agent: curl/8.5.0` are all readable in plaintext.
+* The server response returns `HTTP/1.0 200 OK`, response headers, and the HTML body. Over HTTPS (`TLS`), this payload would be encrypted.
 
----
+## Case 2. TCP Connection Lifecycle (`SYN`, `SYN-ACK`, `FIN`)
 
-## Кейс 2. Жизненный цикл TCP-соединения (`SYN`, `SYN-ACK`, `FIN`)
+**Goal:** Strip out application data and inspect only the opening and graceful teardown of a TCP session.
 
-**Цель:** отфильтровать прикладные данные и проследить только открытие и корректное закрытие TCP-сессии.
+**Command:**
 
-**Команда:**
 ```bash
 sudo tcpdump -i lo -nn -c 16 'tcp port 8080 and (tcp[tcpflags] & (tcp-syn|tcp-rst|tcp-fin) != 0)'
 ```
 
-**Результат захвата:**
+**Capture Results:**
 
-![TCP-флаги открытия и закрытия соединения](tcp-tcpdump.png)
+![TCP flags tcpdump capture](tcp-tcpdump.png)
+![HTTP server TCP log](server-tcp.png)
 
-![Лог обработки запроса сервером](server-tcp.png)
+**Key Takeaways:**
 
-**На что обратить внимание:**
-* `Flags [S]` (`127.0.0.1.42828 > 127.0.0.1.8080`) — клиент инициирует соединение.
-* `Flags [S.]` (`127.0.0.1.8080 > 127.0.0.1.42828`) — порт открыт, сервер подтверждает `SYN` и отправляет свой `SYN`.
-* Два пакета `Flags [F.]` в конце — корректное двустороннее закрытие соединения (`FIN-ACK`) после передачи ответа.
+* `Flags [S]` (`127.0.0.1.42828 > 127.0.0.1.8080`) — the client initiates the connection.
+* `Flags [S.]` (`127.0.0.1.8080 > 127.0.0.1.42828`) — the port is open; the server acknowledges the client's `SYN` and sends its own `SYN`.
+* Two `Flags [F.]` packets at the end — bidirectional graceful connection termination (`FIN-ACK`) after the HTTP response is delivered.
 
----
+## Case 3. Probing a Closed Port (`RST`)
 
-## Кейс 3. Обращение к закрытому порту (`RST`)
+**Goal:** Identify host behavior when a target is reachable over the network, but no service is listening on the destination port.
 
-**Цель:** определить поведение хоста, когда порт доступен по сети, но на нём не запущена ни одна служба.
+**Commands:**
 
-**Команда:**
 ```bash
-# Терминал 1: захват управляющих флагов на закрытом порту 8081
+# Terminal 1: Capture TCP control flags on closed port 8081
 sudo tcpdump -i lo -nn -c 10 'tcp port 8081 and (tcp[tcpflags] & (tcp-syn|tcp-rst|tcp-fin) != 0)'
 
-# Терминал 2: попытка подключения
+# Terminal 2: Attempt connection
 curl -m 2 -s http://127.0.0.1:8081 || true
 ```
 
-**Результат захвата:**
+**Capture Results:**
 
-![Ответ RST при обращении к закрытому порту](rst-tcpdump.png)
+![Closed port RST capture](rst-tcpdump.png)
 
-**На что обратить внимание:**
-* После отправки `Flags [S]` на `127.0.0.1.8081` ядро системы мгновенно возвращает `Flags [R.]` (`RST, ACK`).
-* Наличие `RST` позволяет сразу отличить закрытый порт от случая, когда пакеты молча отбрасываются фаерволом.
+**Key Takeaways:**
 
----
+* Immediately after receiving `Flags [S]` on `127.0.0.1.8081`, the OS kernel replies with `Flags [R.]` (`RST, ACK`).
+* Seeing an immediate `RST` distinguishes a closed port from a port silently dropped by a firewall.
 
-## Кейс 4. Таймаут и ретрансмиты `SYN`
+## Case 4. Connection Timeout & `SYN` Retransmissions
 
-**Цель:** увидеть, как выглядит сетевой трафик при недоступности целевого хоста или фильтрации (`DROP`) на фаерволе.
+**Goal:** Observe network behavior when a destination host is unreachable or packets are silently dropped (`DROP`) by a firewall.
 
-**Команда:**
+**Commands:**
+
 ```bash
-# Терминал 1: отслеживание SYN-пакетов к адресу документации 192.0.2.20
+# Terminal 1: Monitor SYN packets sent to documentation IP 192.0.2.20
 sudo tcpdump -i any -nn -c 8 'host 192.0.2.20 and tcp port 8080 and (tcp[tcpflags] & tcp-syn != 0)'
 
-# Терминал 2: попытка подключения с ограничением времени
+# Terminal 2: Attempt connection with a 4-second timeout
 curl -m 4 -s http://192.0.2.20:8080 || true
 ```
 
-**Результат захвата:**
+**Capture Results:**
 
-![Ретрансмиты SYN при отсутствии ответа](syn-tcpdump.png)
+![SYN timeout capture](syn-tcpdump.png)
 
-**На что обратить внимание:**
-* Клиент отправляет `Flags [S]` с `seq 2776643017` и, не получив ни `SYN-ACK`, ни `RST`, повторяет отправку пакета с тем же `seq` примерно раз в секунду (`16:05:58`, `16:05:59`, `16:06:00`, `16:06:01`).
+**Key Takeaways:**
 
----
+* The client sends `Flags [S]` with `seq 2776643017` and, receiving neither `SYN-ACK` nor `RST`, retransmits the exact same `SYN` packet (`seq 2776643017`) roughly once per second (`16:05:58`, `16:05:59`, `16:06:00`, `16:06:01`).
 
-## Кейс 5. Мониторинг DNS-запросов (`port 53`)
+## Case 5. Monitoring DNS Queries (`port 53`)
 
-**Цель:** проверить, какие доменные имена резолвит система и через какой DNS-сервер идут запросы.
+**Goal:** Inspect which domain names the system resolves and which DNS resolver handles the queries.
 
-**Команда:**
+**Command:**
+
 ```bash
 sudo tcpdump -i any -nn -c 10 'udp port 53 or tcp port 53'
 ```
 
-**Результат захвата:**
+**Capture Results:**
 
-![Перехват локальных DNS-запросов](dns-tcpdump.png)
+![DNS queries capture](dns-tcpdump.png)
 
-**На что обратить внимание:**
-* Запросы идут на локальный stub-резолвер `127.0.0.53:53`.
-* В выводе видны типы запрашиваемых записей: `A?` (IPv4-адрес, например `example.com.`) и `AAAA?` (IPv6-адрес).
+**Key Takeaways:**
 
----
+* Queries are routed to the local stub resolver at `127.0.0.53:53`.
+* The output clearly displays record types being queried: `A?` (IPv4 address, e.g., `example.com.`) and `AAAA?` (IPv6 address).
 
-## Связка `tcpdump` + Wireshark
+## Workflow: `tcpdump` + Wireshark
 
-Когда на удалённом сервере или ВМ нет графического интерфейса, удобнее записать узкий дамп через `tcpdump`, а детальный разбор (реконструкцию TCP-потоков, анализ HTTP/TLS и таймингов) выполнить в Wireshark:
+When working on a headless server or VM without a GUI, capture a targeted `.pcap` dump with `tcpdump` and transfer it locally for deeper inspection in Wireshark (TCP stream reassembly, HTTP/TLS dissection, and timing analysis):
 
 ```bash
-# 1. Записать дамп на целевой машине
+# 1. Capture targeted traffic to a file on the remote/target host
 sudo tcpdump -i lo -nn -w local_http.pcap 'tcp port 8080'
 
-# 2. Открыть файл в Wireshark
+# 2. Open the capture file in Wireshark
 wireshark local_http.pcap
 ```
