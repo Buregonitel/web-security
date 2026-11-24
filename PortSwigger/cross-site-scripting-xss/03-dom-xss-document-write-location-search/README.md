@@ -77,11 +77,11 @@ Using an SVG with `onload` is a common technique when `<script>` tags are filter
 
 ### Lab solved
 
-![Lab solved - DOM XSS](site-2.png)
+![Lab solved - DOM XSS](dom-xss-solved.png)
 
 ### Request in Burp HTTP history
 
-![Burp history showing the payload](bs-2.png)
+![Burp history showing the payload](dom-xss-burp.png)
 
 ---
 
